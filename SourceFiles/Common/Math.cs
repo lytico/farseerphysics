@@ -1,6 +1,6 @@
 ﻿/*
-* Farseer Physics Engine based on Box2D.XNA port:
-* Copyright (c) 2011 Ian Qvist
+* Farseer Physics Engine:
+* Copyright (c) 2012 Ian Qvist
 * 
 * Original source Box2D:
 * Copyright (c) 2006-2011 Erin Catto http://www.box2d.org 
@@ -29,9 +29,14 @@ namespace FarseerPhysics.Common
 {
     public static class MathUtils
     {
-        public static float Cross(Vector2 a, Vector2 b)
+        public static float Cross(ref Vector2 a, ref Vector2 b)
         {
             return a.X * b.Y - a.Y * b.X;
+        }
+
+        public static float Cross(Vector2 a, Vector2 b)
+        {
+            return Cross(ref a, ref b);
         }
 
         /// Perform the cross product on two vectors.
@@ -557,9 +562,7 @@ namespace FarseerPhysics.Common
                 det = 1.0f / det;
             }
 
-            return new Vector3(det * Vector3.Dot(b, Vector3.Cross(ey, ez)),
-                               det * Vector3.Dot(ex, Vector3.Cross(b, ez)),
-                               det * Vector3.Dot(ex, Vector3.Cross(ey, b)));
+            return new Vector3(det * Vector3.Dot(b, Vector3.Cross(ey, ez)), det * Vector3.Dot(ex, Vector3.Cross(b, ez)), det * Vector3.Dot(ex, Vector3.Cross(ey, b)));
         }
 
         /// <summary>
@@ -623,6 +626,22 @@ namespace FarseerPhysics.Common
             M.ez.X = M.ex.Z;
             M.ez.Y = M.ey.Z;
             M.ez.Z = det * (a11 * a22 - a12 * a12);
+        }
+
+        /// Get the inverse of this matrix as a 2-by-2.
+        /// Returns the zero matrix if singular.
+        public void GetInverse22(Mat33 M)
+        {
+            float a = ex.X, b = ey.X, c = ex.Y, d = ey.Y;
+            float det = a * d - b * c;
+            if (det != 0.0f) //TODO: float tol
+            {
+                det = 1.0f / det;
+            }
+
+            M.ex.X = det * d; M.ey.X = -det * b; M.ex.Z = 0.0f;
+            M.ex.Y = -det * c; M.ey.Y = det * a; M.ey.Z = 0.0f;
+            M.ez.X = 0.0f; M.ez.Y = 0.0f; M.ez.Z = 0.0f;
         }
     }
 

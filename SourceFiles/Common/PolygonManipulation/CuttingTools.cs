@@ -17,22 +17,31 @@ namespace FarseerPhysics.Common.PolygonManipulation
         /// <param name="fixture">The Fixture to split</param>
         /// <param name="entryPoint">The entry point - The start point</param>
         /// <param name="exitPoint">The exit point - The end point</param>
-        /// <param name="splitSize">The size of the split. Think of this as the laser-width</param>
         /// <param name="first">The first collection of vertexes</param>
         /// <param name="second">The second collection of vertexes</param>
-        public static void SplitShape(Fixture fixture, Vector2 entryPoint, Vector2 exitPoint, float splitSize,
-                                      out Vertices first, out Vertices second)
+        public static void SplitShape(Fixture fixture, Vector2 entryPoint, Vector2 exitPoint, out Vertices first, out Vertices second)
         {
             Vector2 localEntryPoint = fixture.Body.GetLocalPoint(ref entryPoint);
             Vector2 localExitPoint = fixture.Body.GetLocalPoint(ref exitPoint);
 
             PolygonShape shape = fixture.Shape as PolygonShape;
 
+            //We can only cut polygons at the moment
             if (shape == null)
             {
                 first = new Vertices();
                 second = new Vertices();
                 return;
+            }
+
+            //Offset the entry and exit points if they are too close to the vertices
+            foreach (Vector2 vertex in shape.Vertices)
+            {
+                if (vertex.Equals(localEntryPoint))
+                    localEntryPoint -= new Vector2(0, Settings.Epsilon);
+
+                if (vertex.Equals(localExitPoint))
+                    localExitPoint += new Vector2(0, Settings.Epsilon);
             }
 
             Vertices vertices = new Vertices(shape.Vertices);
@@ -104,7 +113,10 @@ namespace FarseerPhysics.Common.PolygonManipulation
                 }
                 offset.Normalize();
 
-                newPolygon[n][cutAdded[n]] += splitSize * offset;
+                if (!offset.IsValid())
+                    offset = Vector2.One;
+
+                newPolygon[n][cutAdded[n]] += Settings.Epsilon * offset;
 
                 if (cutAdded[n] < newPolygon[n].Count - 2)
                 {
@@ -116,7 +128,10 @@ namespace FarseerPhysics.Common.PolygonManipulation
                 }
                 offset.Normalize();
 
-                newPolygon[n][cutAdded[n] + 1] += splitSize * offset;
+                if (!offset.IsValid())
+                    offset = Vector2.One;
+
+                newPolygon[n][cutAdded[n] + 1] += Settings.Epsilon * offset;
             }
 
             first = newPolygon[0];
@@ -130,8 +145,7 @@ namespace FarseerPhysics.Common.PolygonManipulation
         /// <param name="world">The world.</param>
         /// <param name="start">The startpoint.</param>
         /// <param name="end">The endpoint.</param>
-        /// <param name="thickness">The thickness of the cut</param>
-        public static void Cut(World world, Vector2 start, Vector2 end, float thickness)
+        public static void Cut(World world, Vector2 start, Vector2 end)
         {
             List<Fixture> fixtures = new List<Fixture>();
             List<Vector2> entryPoints = new List<Vector2>();
@@ -162,7 +176,7 @@ namespace FarseerPhysics.Common.PolygonManipulation
 
             for (int i = 0; i < fixtures.Count; i++)
             {
-                // can't cut circles yet !
+                // can't cut circles or edges yet !
                 if (fixtures[i].Shape.ShapeType != ShapeType.Polygon)
                     continue;
 
@@ -171,13 +185,12 @@ namespace FarseerPhysics.Common.PolygonManipulation
                     //Split the shape up into two shapes
                     Vertices first;
                     Vertices second;
-                    SplitShape(fixtures[i], entryPoints[i], exitPoints[i], thickness, out first, out second);
+                    SplitShape(fixtures[i], entryPoints[i], exitPoints[i], out first, out second);
 
                     //Delete the original shape and create two new. Retain the properties of the body.
                     if (SanityCheck(first))
                     {
-                        Body firstFixture = BodyFactory.CreatePolygon(world, first, fixtures[i].Shape.Density,
-                                                                            fixtures[i].Body.Position);
+                        Body firstFixture = BodyFactory.CreatePolygon(world, first, fixtures[i].Shape.Density, fixtures[i].Body.Position);
                         firstFixture.Rotation = fixtures[i].Body.Rotation;
                         firstFixture.LinearVelocity = fixtures[i].Body.LinearVelocity;
                         firstFixture.AngularVelocity = fixtures[i].Body.AngularVelocity;
@@ -186,13 +199,13 @@ namespace FarseerPhysics.Common.PolygonManipulation
 
                     if (SanityCheck(second))
                     {
-                        Body secondFixture = BodyFactory.CreatePolygon(world, second, fixtures[i].Shape.Density,
-                                                                             fixtures[i].Body.Position);
+                        Body secondFixture = BodyFactory.CreatePolygon(world, second, fixtures[i].Shape.Density, fixtures[i].Body.Position);
                         secondFixture.Rotation = fixtures[i].Body.Rotation;
                         secondFixture.LinearVelocity = fixtures[i].Body.LinearVelocity;
                         secondFixture.AngularVelocity = fixtures[i].Body.AngularVelocity;
                         secondFixture.BodyType = BodyType.Dynamic;
                     }
+
                     world.RemoveBody(fixtures[i].Body);
                 }
             }
@@ -200,44 +213,23 @@ namespace FarseerPhysics.Common.PolygonManipulation
 
         private static bool SanityCheck(Vertices vertices)
         {
+            //Make sure it is is a polygon
             if (vertices.Count < 3)
                 return false;
 
+            //Make sure it has a large enugh area
             if (vertices.GetArea() < 0.00001f)
                 return false;
 
+            //Make sure no vertices are too close to each other
             for (int i = 0; i < vertices.Count; ++i)
             {
-                int i1 = i;
-                int i2 = i + 1 < vertices.Count ? i + 1 : 0;
-                Vector2 edge = vertices[i2] - vertices[i1];
+                Vector2 current = vertices[i];
+                Vector2 next = vertices.NextVertex(i);
+                Vector2 edge = next - current;
+
                 if (edge.LengthSquared() < Settings.Epsilon * Settings.Epsilon)
                     return false;
-            }
-
-            for (int i = 0; i < vertices.Count; ++i)
-            {
-                int i1 = i;
-                int i2 = i + 1 < vertices.Count ? i + 1 : 0;
-                Vector2 edge = vertices[i2] - vertices[i1];
-
-                for (int j = 0; j < vertices.Count; ++j)
-                {
-                    // Don't check vertices on the current edge.
-                    if (j == i1 || j == i2)
-                    {
-                        continue;
-                    }
-
-                    Vector2 r = vertices[j] - vertices[i1];
-
-                    // Your polygon is non-convex (it has an indentation) or
-                    // has colinear edges.
-                    float s = edge.X * r.Y - edge.Y * r.X;
-
-                    if (s < 0.0f)
-                        return false;
-                }
             }
 
             return true;

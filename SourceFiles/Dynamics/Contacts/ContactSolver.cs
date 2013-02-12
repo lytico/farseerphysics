@@ -1,6 +1,6 @@
 /*
-* Farseer Physics Engine based on Box2D.XNA port:
-* Copyright (c) 2011 Ian Qvist
+* Farseer Physics Engine:
+* Copyright (c) 2012 Ian Qvist
 * 
 * Original source Box2D:
 * Copyright (c) 2006-2011 Erin Catto http://www.box2d.org 
@@ -90,7 +90,7 @@ namespace FarseerPhysics.Dynamics.Contacts
         public Contact[] _contacts;
         public int _count;
 
-        public void Reset(TimeStep step, int count, Contact[] contacts, Position[] positions, Velocity[] velocities)
+        public void Reset(TimeStep step, int count, Contact[] contacts, Position[] positions, Velocity[] velocities, bool warmstarting = Settings.EnableWarmstarting)
         {
             _step = step;
             _count = count;
@@ -774,8 +774,8 @@ namespace FarseerPhysics.Dynamics.Contacts
                     iA = pc.invIA;
                 }
 
-                float mB = pc.invMassB;
-                float iB = pc.invIB;
+                float mB = 0.0f;
+                float iB = 0.0f;
                 if (indexB == toiIndexA || indexB == toiIndexB)
                 {
                     mB = pc.invMassB;

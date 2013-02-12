@@ -1,6 +1,6 @@
 /*
-* Farseer Physics Engine based on Box2D.XNA port:
-* Copyright (c) 2011 Ian Qvist
+* Farseer Physics Engine:
+* Copyright (c) 2012 Ian Qvist
 * 
 * Original source Box2D:
 * Copyright (c) 2006-2011 Erin Catto http://www.box2d.org 
@@ -28,7 +28,7 @@ using Microsoft.Xna.Framework;
 namespace FarseerPhysics.Dynamics.Joints
 {
     /// <summary>
-    /// A distance joint contrains two points on two bodies
+    /// A slider joint contrains two points on two bodies
     /// to remain at a fixed distance from each other. You can view
     /// this as a massless, rigid rod.
     /// </summary>
@@ -73,8 +73,7 @@ namespace FarseerPhysics.Dynamics.Joints
         /// <param name="localAnchorB">The second body anchor.</param>
         /// <param name="minLength">The minimum length between anchorpoints</param>
         /// <param name="maxlength">The maximum length between anchorpoints.</param>
-        public SliderJoint(Body bodyA, Body bodyB, Vector2 localAnchorA, Vector2 localAnchorB, float minLength,
-                           float maxlength)
+        public SliderJoint(Body bodyA, Body bodyB, Vector2 localAnchorA, Vector2 localAnchorB, float minLength, float maxlength)
             : base(bodyA, bodyB)
         {
             JointType = JointType.Slider;
@@ -120,13 +119,13 @@ namespace FarseerPhysics.Dynamics.Joints
             set { Debug.Assert(false, "You can't set the world anchor on this joint type."); }
         }
 
-        public override Vector2 GetReactionForce(float inv_dt)
+        public override Vector2 GetReactionForce(float invDt)
         {
-            Vector2 F = (inv_dt * _impulse) * _u;
+            Vector2 F = (invDt * _impulse) * _u;
             return F;
         }
 
-        public override float GetReactionTorque(float inv_dt)
+        public override float GetReactionTorque(float invDt)
         {
             return 0.0f;
         }

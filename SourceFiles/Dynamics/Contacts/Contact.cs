@@ -1,6 +1,6 @@
 /*
-* Farseer Physics Engine based on Box2D.XNA port:
-* Copyright (c) 2011 Ian Qvist
+* Farseer Physics Engine:
+* Copyright (c) 2012 Ian Qvist
 * 
 * Original source Box2D:
 * Copyright (c) 2006-2011 Erin Catto http://www.box2d.org 
@@ -143,7 +143,7 @@ namespace FarseerPhysics.Dynamics.Contacts
         internal ContactFlags Flags;
         public float Friction { get; set; }
         public float Restitution { get; set; }
-        
+
         /// Get or set the desired tangent speed for a conveyor belt behavior. In meters per second.
         public float TangentSpeed { get; set; }
 
@@ -157,6 +157,10 @@ namespace FarseerPhysics.Dynamics.Contacts
             Friction = Settings.MixFriction(FixtureA.Friction, FixtureB.Friction);
         }
 
+        /// <summary>
+        /// Get the contact manifold. Do not modify the manifold unless you understand the
+        /// internals of Box2D.
+        /// </summary>
         public Manifold Manifold;
 
         // Nodes for connecting bodies.
@@ -221,16 +225,6 @@ namespace FarseerPhysics.Dynamics.Contacts
         /// </summary>
         /// <value>The child index B.</value>
         public int ChildIndexB { get; internal set; }
-
-        /// <summary>
-        /// Get the contact manifold. Do not modify the manifold unless you understand the
-        /// internals of Box2D.
-        /// </summary>
-        /// <param name="manifold">The manifold.</param>
-        public void GetManifold(out Manifold manifold)
-        {
-            manifold = Manifold;
-        }
 
         /// <summary>
         /// Gets the world manifold.
@@ -323,7 +317,7 @@ namespace FarseerPhysics.Dynamics.Contacts
             {
                 Shape shapeA = FixtureA.Shape;
                 Shape shapeB = FixtureB.Shape;
-                touching = AABB.TestOverlap(shapeA, ChildIndexA, shapeB, ChildIndexB, ref bodyA.Xf, ref bodyB.Xf);
+                touching = Collision.Collision.TestOverlap(shapeA, ChildIndexA, shapeB, ChildIndexB, ref bodyA.Xf, ref bodyB.Xf);
 
                 // Sensors don't generate manifolds.
                 Manifold.PointCount = 0;
@@ -378,22 +372,21 @@ namespace FarseerPhysics.Dynamics.Contacts
                 if (touching)
                 {
 
+                    //TODO: Create a setting that can turn behavior on and off?
 #if true
-                    bool enabledA, enabledB;
+                    bool enabledA = true, enabledB = true;
 
                     // Report the collision to both participants. Track which ones returned true so we can
                     // later call OnSeparation if the contact is disabled for a different reason.
                     if (FixtureA.OnCollision != null)
-                        enabledA = FixtureA.OnCollision(FixtureA, FixtureB, this);
-                    else
-                        enabledA = true;
+                        foreach (OnCollisionEventHandler handler in FixtureA.OnCollision.GetInvocationList())
+                            enabledA = handler(FixtureA, FixtureB, this) && enabledA;
 
                     // Reverse the order of the reported fixtures. The first fixture is always the one that the
                     // user subscribed to.
                     if (FixtureB.OnCollision != null)
-                        enabledB = FixtureB.OnCollision(FixtureB, FixtureA, this);
-                    else
-                        enabledB = true;
+                        foreach (OnCollisionEventHandler handler in FixtureB.OnCollision.GetInvocationList())
+                            enabledB = handler(FixtureB, FixtureA, this) && enabledB;
 
                     Enabled = enabledA && enabledB;
 
@@ -468,41 +461,29 @@ namespace FarseerPhysics.Dynamics.Contacts
             switch (_type)
             {
                 case ContactType.Polygon:
-                    Collision.Collision.CollidePolygons(ref manifold,
-                                                        (PolygonShape)FixtureA.Shape, ref transformA,
-                                                        (PolygonShape)FixtureB.Shape, ref transformB);
+                    Collision.Collision.CollidePolygons(ref manifold, (PolygonShape)FixtureA.Shape, ref transformA, (PolygonShape)FixtureB.Shape, ref transformB);
                     break;
                 case ContactType.PolygonAndCircle:
-                    Collision.Collision.CollidePolygonAndCircle(ref manifold,
-                                                                (PolygonShape)FixtureA.Shape, ref transformA,
-                                                                (CircleShape)FixtureB.Shape, ref transformB);
+                    Collision.Collision.CollidePolygonAndCircle(ref manifold, (PolygonShape)FixtureA.Shape, ref transformA, (CircleShape)FixtureB.Shape, ref transformB);
                     break;
                 case ContactType.EdgeAndCircle:
-                    Collision.Collision.CollideEdgeAndCircle(ref manifold,
-                                                             (EdgeShape)FixtureA.Shape, ref transformA,
-                                                             (CircleShape)FixtureB.Shape, ref transformB);
+                    Collision.Collision.CollideEdgeAndCircle(ref manifold, (EdgeShape)FixtureA.Shape, ref transformA, (CircleShape)FixtureB.Shape, ref transformB);
                     break;
                 case ContactType.EdgeAndPolygon:
-                    Collision.Collision.CollideEdgeAndPolygon(ref manifold,
-                                                              (EdgeShape)FixtureA.Shape, ref transformA,
-                                                              (PolygonShape)FixtureB.Shape, ref transformB);
+                    Collision.Collision.CollideEdgeAndPolygon(ref manifold, (EdgeShape)FixtureA.Shape, ref transformA, (PolygonShape)FixtureB.Shape, ref transformB);
                     break;
                 case ContactType.ChainAndCircle:
                     ChainShape chain = (ChainShape)FixtureA.Shape;
-                    chain.GetChildEdge(ref _edge, ChildIndexA);
-                    Collision.Collision.CollideEdgeAndCircle(ref manifold, _edge, ref transformA,
-                                                             (CircleShape)FixtureB.Shape, ref transformB);
+                    chain.GetChildEdge(_edge, ChildIndexA);
+                    Collision.Collision.CollideEdgeAndCircle(ref manifold, _edge, ref transformA, (CircleShape)FixtureB.Shape, ref transformB);
                     break;
                 case ContactType.ChainAndPolygon:
                     ChainShape loop2 = (ChainShape)FixtureA.Shape;
-                    loop2.GetChildEdge(ref _edge, ChildIndexA);
-                    Collision.Collision.CollideEdgeAndPolygon(ref manifold, _edge, ref transformA,
-                                                              (PolygonShape)FixtureB.Shape, ref transformB);
+                    loop2.GetChildEdge(_edge, ChildIndexA);
+                    Collision.Collision.CollideEdgeAndPolygon(ref manifold, _edge, ref transformA, (PolygonShape)FixtureB.Shape, ref transformB);
                     break;
                 case ContactType.Circle:
-                    Collision.Collision.CollideCircles(ref manifold,
-                                                       (CircleShape)FixtureA.Shape, ref transformA,
-                                                       (CircleShape)FixtureB.Shape, ref transformB);
+                    Collision.Collision.CollideCircles(ref manifold, (CircleShape)FixtureA.Shape, ref transformA, (CircleShape)FixtureB.Shape, ref transformB);
                     break;
             }
         }
@@ -557,6 +538,13 @@ namespace FarseerPhysics.Dynamics.Contacts
             FixtureA.Body.World.ContactManager.RemoveActiveContact(this);
 #endif
             FixtureA.Body.World.ContactPool.Enqueue(this);
+
+            if (Manifold.PointCount > 0 && FixtureA.IsSensor == false && FixtureB.IsSensor == false)
+            {
+                FixtureA.Body.Awake = true;
+                FixtureB.Body.Awake = true;
+            }
+
             Reset(null, 0, null, 0);
         }
 

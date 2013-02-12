@@ -1,6 +1,6 @@
 ﻿/*
-* Farseer Physics Engine based on Box2D.XNA port:
-* Copyright (c) 2011 Ian Qvist
+* Farseer Physics Engine:
+* Copyright (c) 2012 Ian Qvist
 * 
 * Original source Box2D:
 * Copyright (c) 2006-2011 Erin Catto http://www.box2d.org 
@@ -77,7 +77,7 @@ namespace FarseerPhysics.Dynamics.Joints
             LocalAnchorA = localAnchorA;
             LocalAnchorB = localAnchorB;
 
-            //FPE: Setting default MaxLength
+            //FPE feature: Setting default MaxLength
             Vector2 d = WorldAnchorB - WorldAnchorA;
             MaxLength = d.Length();
         }
@@ -189,7 +189,6 @@ namespace FarseerPhysics.Dynamics.Joints
                 _impulse = 0.0f;
             }
 
-
             data.velocities[_indexA].v = vA;
             data.velocities[_indexA].w = wA;
             data.velocities[_indexB].v = vB;
@@ -202,7 +201,6 @@ namespace FarseerPhysics.Dynamics.Joints
             float wA = data.velocities[_indexA].w;
             Vector2 vB = data.velocities[_indexB].v;
             float wB = data.velocities[_indexB].w;
-
 
             // Cdot = dot(u, v + cross(w, r))
             Vector2 vpA = vA + MathUtils.Cross(wA, _rA);
@@ -246,9 +244,7 @@ namespace FarseerPhysics.Dynamics.Joints
             Vector2 rB = MathUtils.Mul(qB, LocalAnchorB - _localCenterB);
             Vector2 u = cB + rB - cA - rA;
 
-            float length = u.Length();
-            u.Normalize();
-
+            float length = u.Length(); u.Normalize();
             float C = length - MaxLength;
 
             C = MathUtils.Clamp(C, 0.0f, Settings.MaxLinearCorrection);

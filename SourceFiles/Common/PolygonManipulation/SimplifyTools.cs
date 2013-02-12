@@ -111,7 +111,7 @@ namespace FarseerPhysics.Common.PolygonManipulation
         private static double DistancePointPoint(Vector2 p, Vector2 p2)
         {
             double dx = p.X - p2.X;
-            double dy = p.Y - p2.X;
+            double dy = p.Y - p2.Y;
             return Math.Sqrt(dx * dx + dy * dy);
         }
 
@@ -319,7 +319,7 @@ namespace FarseerPhysics.Common.PolygonManipulation
                 Vector2 next = vertices.NextVertex(i);
 
                 //If they are closer than the distance, continue
-                if ((next - current).LengthSquared() <= distance)
+                if ((next - current).LengthSquared() <= distance * distance)
                     continue;
 
                 simplified.Add(current);

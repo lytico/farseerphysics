@@ -1,6 +1,6 @@
 /*
-* Farseer Physics Engine based on Box2D.XNA port:
-* Copyright (c) 2011 Ian Qvist
+* Farseer Physics Engine:
+* Copyright (c) 2012 Ian Qvist
 * 
 * Original source Box2D:
 * Copyright (c) 2006-2011 Erin Catto http://www.box2d.org 
@@ -113,7 +113,6 @@ namespace FarseerPhysics.Dynamics.Joints
             set
             {
                 Debug.Assert(MathUtils.IsValid(value) && value >= 0.0f);
-
                 _maxForce = value;
             }
         }
@@ -144,14 +143,14 @@ namespace FarseerPhysics.Dynamics.Joints
             }
         }
 
-        public override Vector2 GetReactionForce(float inv_dt)
+        public override Vector2 GetReactionForce(float invDt)
         {
-            return inv_dt * _impulse;
+            return invDt * _impulse;
         }
 
-        public override float GetReactionTorque(float inv_dt)
+        public override float GetReactionTorque(float invDt)
         {
-            return inv_dt * 0.0f;
+            return invDt * 0.0f;
         }
 
         internal override void InitVelocityConstraints(ref SolverData data)
@@ -159,7 +158,7 @@ namespace FarseerPhysics.Dynamics.Joints
             _indexB = BodyA.IslandIndex;
             _localCenterB = BodyA.Sweep.LocalCenter;
             _invMassB = BodyA.InvMass;
-            _invIB = 0;
+            _invIB = BodyA.InvI;
 
             Vector2 cB = data.positions[_indexB].c;
             float aB = data.positions[_indexB].a;

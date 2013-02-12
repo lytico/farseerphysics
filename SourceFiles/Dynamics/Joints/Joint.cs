@@ -1,6 +1,6 @@
 /*
-* Farseer Physics Engine based on Box2D.XNA port:
-* Copyright (c) 2011 Ian Qvist
+* Farseer Physics Engine:
+* Copyright (c) 2012 Ian Qvist
 * 
 * Original source Box2D:
 * Copyright (c) 2006-2011 Erin Catto http://www.box2d.org 
@@ -28,17 +28,22 @@ namespace FarseerPhysics.Dynamics.Joints
 {
     public enum JointType
     {
+        Unknown,
         Revolute,
         Prismatic,
         Distance,
         Pulley,
+        //Mouse, <- We have fixed mouse
         Gear,
         Wheel,
         Weld,
         Friction,
+        Rope,
+        Motor,
+
+        //FPE note: From here on and down, it is only FPE joints
         Slider,
         Angle,
-        Rope,
         FixedMouse,
         FixedRevolute,
         FixedDistance,
@@ -56,7 +61,7 @@ namespace FarseerPhysics.Dynamics.Joints
         Equal,
     }
 
-    internal struct Jacobian
+    internal struct Jacobian //TODO
     {
         public float AngularA;
         public float AngularB;
@@ -107,12 +112,11 @@ namespace FarseerPhysics.Dynamics.Joints
         /// The default value is float.MaxValue
         /// </summary>
         public float Breakpoint = float.MaxValue;
+        public bool Enabled = true;
 
         internal JointEdge EdgeA = new JointEdge();
         internal JointEdge EdgeB = new JointEdge();
-        public bool Enabled = true;
         internal bool IslandFlag;
-        protected int m_index;
 
         protected Joint()
         {
@@ -177,15 +181,6 @@ namespace FarseerPhysics.Dynamics.Joints
         public object UserData { get; set; }
 
         /// <summary>
-        /// Short-cut function to determine if either body is inactive.
-        /// </summary>
-        /// <value><c>true</c> if active; otherwise, <c>false</c>.</value>
-        public bool Active
-        {
-            get { return BodyA.Enabled && BodyB.Enabled; }
-        }
-
-        /// <summary>
         /// Set this flag to true if the attached bodies should collide.
         /// </summary>
         public bool CollideConnected { get; set; }
@@ -198,24 +193,24 @@ namespace FarseerPhysics.Dynamics.Joints
         /// <summary>
         /// Get the reaction force on bodyB at the joint anchor in Newtons.
         /// </summary>
-        /// <param name="inv_dt">The inv_dt.</param>
+        /// <param name="invDt">The inv_dt.</param>
         /// <returns></returns>
-        public abstract Vector2 GetReactionForce(float inv_dt);
+        public abstract Vector2 GetReactionForce(float invDt);
 
         /// <summary>
         /// Get the reaction torque on bodyB in N*m.
         /// </summary>
-        /// <param name="inv_dt">The inv_dt.</param>
+        /// <param name="invDt">The inv_dt.</param>
         /// <returns></returns>
-        public abstract float GetReactionTorque(float inv_dt);
+        public abstract float GetReactionTorque(float invDt);
 
         protected void WakeBodies()
         {
-            BodyA.Awake = true;
+            //if (BodyA != null)
+                //BodyA.Awake = true;
+
             if (BodyB != null)
-            {
                 BodyB.Awake = true;
-            }
         }
 
         /// <summary>

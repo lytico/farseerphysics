@@ -1,6 +1,6 @@
 ﻿/*
-* Farseer Physics Engine based on Box2D.XNA port:
-* Copyright (c) 2011 Ian Qvist
+* Farseer Physics Engine:
+* Copyright (c) 2012 Ian Qvist
 * 
 * Original source Box2D:
 * Copyright (c) 2006-2011 Erin Catto http://www.box2d.org 
@@ -40,7 +40,14 @@ namespace FarseerPhysics
         /// NOTE: If you are using a debug view that shows performance counters,
         /// you might want to enable this.
         /// </summary>
-        public static bool EnableDiagnostics = true;
+        public const bool EnableDiagnostics = true;
+
+        /// <summary>
+        /// Set this to true to skip sanity checks in the engine. This will speed up the
+        /// tools by removing the overhead of the checks, but you will need to handle checks
+        /// yourself where it is needed.
+        /// </summary>
+        public const bool SkipSanityChecks = false;
 
         /// <summary>
         /// The number of velocity iterations used in the solver.
@@ -58,9 +65,17 @@ namespace FarseerPhysics
         public static bool ContinuousPhysics = true;
 
         /// <summary>
+        /// If true, it will run a GiftWrap convex hull on all polygon inputs.
+        /// This makes for a more stable engine when given random input,
+        /// but if speed of the creation of polygons are more important,
+        /// you might want to set this to false.
+        /// </summary>
+        public static bool UseConvexHullPolygons = true;
+
+        /// <summary>
         /// The number of velocity iterations in the TOI solver
         /// </summary>
-        public static int TOIVelocityIterations = 8;
+        public static int TOIVelocityIterations = VelocityIterations;
 
         /// <summary>
         /// The number of position iterations in the TOI solver
@@ -75,7 +90,7 @@ namespace FarseerPhysics
         /// <summary>
         /// Enable/Disable warmstarting
         /// </summary>
-        public static bool EnableWarmstarting = true;
+        public const bool EnableWarmstarting = true;
 
         /// <summary>
         /// Enable/Disable sleeping
@@ -126,6 +141,7 @@ namespace FarseerPhysics
 
         /// <summary>
         /// The maximum number of contact points between two convex shapes.
+        /// DO NOT CHANGE THIS VALUE!
         /// </summary>
         public const int MaxManifoldPoints = 2;
 
@@ -193,10 +209,8 @@ namespace FarseerPhysics
         /// to overshoot.
         /// </summary>
         public const float Baumgarte = 0.2f;
-        public const float TOIBaumgarte = 0.75f;
 
         // Sleep
-
         /// <summary>
         /// The time that a body must be still before it will go to sleep.
         /// </summary>
@@ -227,6 +241,11 @@ namespace FarseerPhysics
         public const float MaxRotation = (0.5f * Pi);
 
         public const float MaxRotationSquared = (MaxRotation * MaxRotation);
+
+        /// <summary>
+        /// Defines the maximum number of iterations made by the GJK algorithm.
+        /// </summary>
+        public const int MaxGJKIterations = 20;
 
         /// <summary>
         /// Friction mixing law. Feel free to customize this.

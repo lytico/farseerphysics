@@ -1,6 +1,6 @@
 ﻿/*
-* Farseer Physics Engine based on Box2D.XNA port:
-* Copyright (c) 2011 Ian Qvist
+* Farseer Physics Engine:
+* Copyright (c) 2012 Ian Qvist
 * 
 * Original source Box2D:
 * Copyright (c) 2006-2011 Erin Catto http://www.box2d.org 
@@ -33,120 +33,11 @@ using FarseerPhysics.Common;
 using FarseerPhysics.Controllers;
 using FarseerPhysics.Dynamics.Contacts;
 using FarseerPhysics.Dynamics.Joints;
+using FarseerPhysics.Fluids;
 using Microsoft.Xna.Framework;
 
 namespace FarseerPhysics.Dynamics
 {
-    /// <summary>
-    /// Contains filter data that can determine whether an object should be processed or not.
-    /// </summary>
-    public abstract class FilterData
-    {
-        public Category DisabledOnCategories = Category.None;
-
-        public int DisabledOnGroup;
-        public Category EnabledOnCategories = Category.All;
-        public int EnabledOnGroup;
-
-        public virtual bool IsActiveOn(Body body)
-        {
-            if (body == null || !body.Enabled || body.IsStatic)
-                return false;
-
-            if (body.FixtureList == null)
-                return false;
-
-            foreach (Fixture fixture in body.FixtureList)
-            {
-                //Disable
-                if ((fixture.CollisionGroup == DisabledOnGroup) &&
-                    fixture.CollisionGroup != 0 && DisabledOnGroup != 0)
-                    return false;
-
-                if ((fixture.CollisionCategories & DisabledOnCategories) != Category.None)
-                    return false;
-
-                if (EnabledOnGroup != 0 || EnabledOnCategories != Category.All)
-                {
-                    //Enable
-                    if ((fixture.CollisionGroup == EnabledOnGroup) &&
-                        fixture.CollisionGroup != 0 && EnabledOnGroup != 0)
-                        return true;
-
-                    if ((fixture.CollisionCategories & EnabledOnCategories) != Category.None &&
-                        EnabledOnCategories != Category.All)
-                        return true;
-                }
-                else
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Adds the category.
-        /// </summary>
-        /// <param name="category">The category.</param>
-        public void AddDisabledCategory(Category category)
-        {
-            DisabledOnCategories |= category;
-        }
-
-        /// <summary>
-        /// Removes the category.
-        /// </summary>
-        /// <param name="category">The category.</param>
-        public void RemoveDisabledCategory(Category category)
-        {
-            DisabledOnCategories &= ~category;
-        }
-
-        /// <summary>
-        /// Determines whether this body ignores the the specified controller.
-        /// </summary>
-        /// <param name="category">The category.</param>
-        /// <returns>
-        /// 	<c>true</c> if the object has the specified category; otherwise, <c>false</c>.
-        /// </returns>
-        public bool IsInDisabledCategory(Category category)
-        {
-            return (DisabledOnCategories & category) == category;
-        }
-
-        /// <summary>
-        /// Adds the category.
-        /// </summary>
-        /// <param name="category">The category.</param>
-        public void AddEnabledCategory(Category category)
-        {
-            EnabledOnCategories |= category;
-        }
-
-        /// <summary>
-        /// Removes the category.
-        /// </summary>
-        /// <param name="category">The category.</param>
-        public void RemoveEnabledCategory(Category category)
-        {
-            EnabledOnCategories &= ~category;
-        }
-
-        /// <summary>
-        /// Determines whether this body ignores the the specified controller.
-        /// </summary>
-        /// <param name="category">The category.</param>
-        /// <returns>
-        /// 	<c>true</c> if the object has the specified category; otherwise, <c>false</c>.
-        /// </returns>
-        public bool IsInEnabledCategory(Category category)
-        {
-            return (EnabledOnCategories & category) == category;
-        }
-    }
-
     [Flags]
     public enum WorldFlags
     {
@@ -205,6 +96,7 @@ namespace FarseerPhysics.Dynamics
         public ControllerDelegate ControllerAdded;
 
         public ControllerDelegate ControllerRemoved;
+        public FluidSystem2 Fluid { get; private set; }
 
         private float _invDt0;
         public Island Island = new Island();
@@ -214,6 +106,7 @@ namespace FarseerPhysics.Dynamics
         private HashSet<Body> _bodyRemoveList = new HashSet<Body>();
         private HashSet<Joint> _jointAddList = new HashSet<Joint>();
         private HashSet<Joint> _jointRemoveList = new HashSet<Joint>();
+
         private TOIInput _input = new TOIInput();
 
         /// <summary>
@@ -221,7 +114,7 @@ namespace FarseerPhysics.Dynamics
         /// </summary>
         public bool Enabled = true;
 
-#if (!SILVERLIGHT)
+#if (!SILVERLIGHT && !WINDOWS_PHONE)
         private Stopwatch _watch = new Stopwatch();
 #endif
 
@@ -247,6 +140,11 @@ namespace FarseerPhysics.Dynamics
 #if OPTIMIZE_TOI
             TOISet = new HashSet<Body>();
 #endif
+
+            _queryAABBCallbackWrapper = QueryAABBCallbackWrapper;
+            _rayCastCallbackWrapper = RayCastCallbackWrapper;
+
+            Fluid = new FluidSystem2(new Vec2(0, -1), 5000, 150, 150);
         }
 
         public World(Vector2 gravity, AABB span)
@@ -282,6 +180,8 @@ namespace FarseerPhysics.Dynamics
         public float ContactsUpdateTime { get; private set; }
 
         public float SolveUpdateTime { get; private set; }
+
+        public float FluidsUpdateTime { get; private set; }
 
         /// <summary>
         /// Get the number of broad-phase proxies.
@@ -358,6 +258,7 @@ namespace FarseerPhysics.Dynamics
             get { return ContactManager.ContactList; }
         }
 
+        //TODO: Convert to setting
         /// <summary>
         /// Enable/disable single stepped continuous physics. For testing.
         /// </summary>
@@ -726,21 +627,21 @@ namespace FarseerPhysics.Dynamics
         /// <param name="dt">The amount of time to simulate, this should not vary.</param>
         public void Step(float dt)
         {
-#if (!SILVERLIGHT)
+#if (!SILVERLIGHT && !WINDOWS_PHONE)
             if (Settings.EnableDiagnostics)
                 _watch.Start();
 #endif
 
             ProcessChanges();
 
-#if (!SILVERLIGHT)
+#if (!SILVERLIGHT && !WINDOWS_PHONE)
             if (Settings.EnableDiagnostics)
                 AddRemoveTime = _watch.ElapsedTicks;
 #endif
             //If there is no change in time, no need to calculate anything.
             if (dt == 0 || !Enabled)
             {
-#if (!SILVERLIGHT)
+#if (!SILVERLIGHT && !WINDOWS_PHONE)
                 if (Settings.EnableDiagnostics)
                 {
                     _watch.Stop();
@@ -768,7 +669,7 @@ namespace FarseerPhysics.Dynamics
                 ControllerList[i].Update(dt);
             }
 
-#if (!SILVERLIGHT)
+#if (!SILVERLIGHT && !WINDOWS_PHONE)
             if (Settings.EnableDiagnostics)
                 ControllersUpdateTime = _watch.ElapsedTicks - AddRemoveTime;
 #endif
@@ -776,14 +677,14 @@ namespace FarseerPhysics.Dynamics
             // Update contacts. This is where some contacts are destroyed.
             ContactManager.Collide();
 
-#if (!SILVERLIGHT)
+#if (!SILVERLIGHT && !WINDOWS_PHONE)
             if (Settings.EnableDiagnostics)
                 ContactsUpdateTime = _watch.ElapsedTicks - (AddRemoveTime + ControllersUpdateTime);
 #endif
             // Integrate velocities, solve velocity raints, and integrate positions.
             Solve(ref step);
 
-#if (!SILVERLIGHT)
+#if (!SILVERLIGHT && !WINDOWS_PHONE)
             if (Settings.EnableDiagnostics)
                 SolveUpdateTime = _watch.ElapsedTicks - (AddRemoveTime + ControllersUpdateTime + ContactsUpdateTime);
 #endif
@@ -794,12 +695,17 @@ namespace FarseerPhysics.Dynamics
                 SolveTOI(ref step);
             }
 
-#if (!SILVERLIGHT)
+#if (!SILVERLIGHT && !WINDOWS_PHONE)
             if (Settings.EnableDiagnostics)
-                ContinuousPhysicsTime = _watch.ElapsedTicks -
-                                        (AddRemoveTime + ControllersUpdateTime + ContactsUpdateTime + SolveUpdateTime);
+                ContinuousPhysicsTime = _watch.ElapsedTicks - (AddRemoveTime + ControllersUpdateTime + ContactsUpdateTime + SolveUpdateTime);
 #endif
-            _invDt0 = step.inv_dt;
+
+            Fluid.Update(dt);
+
+#if (!SILVERLIGHT && !WINDOWS_PHONE)
+            if (Settings.EnableDiagnostics)
+                FluidsUpdateTime = _watch.ElapsedTicks - (AddRemoveTime + ControllersUpdateTime + ContactsUpdateTime + SolveUpdateTime + ContinuousPhysicsTime);
+#endif
 
             if ((Flags & WorldFlags.ClearForces) != 0)
             {
@@ -811,16 +717,17 @@ namespace FarseerPhysics.Dynamics
                 BreakableBodyList[i].Update();
             }
 
-#if (!SILVERLIGHT)
+
+#if (!SILVERLIGHT && !WINDOWS_PHONE)
             if (Settings.EnableDiagnostics)
             {
                 _watch.Stop();
-                //AddRemoveTime = 1000 * AddRemoveTime / Stopwatch.Frequency;
 
                 UpdateTime = _watch.ElapsedTicks;
                 _watch.Reset();
             }
 #endif
+            _invDt0 = step.inv_dt;
         }
 
         /// <summary>
@@ -850,12 +757,19 @@ namespace FarseerPhysics.Dynamics
         /// <param name="aabb">The aabb query box.</param>
         public void QueryAABB(Func<Fixture, bool> callback, ref AABB aabb)
         {
-            ContactManager.BroadPhase.Query(proxyId =>
-                                                {
-                                                    FixtureProxy proxy = ContactManager.BroadPhase.GetProxy(proxyId);
-                                                    return callback(proxy.Fixture);
-                                                }, ref aabb);
+            _queryAABBCallback = callback;
+            ContactManager.BroadPhase.Query(_queryAABBCallbackWrapper, ref aabb);
+            _queryAABBCallback = null;
         }
+
+        private bool QueryAABBCallbackWrapper(int proxyId)
+        {
+            FixtureProxy proxy = ContactManager.BroadPhase.GetProxy(proxyId);
+            return _queryAABBCallback(proxy.Fixture);
+        }
+
+        private Func<Fixture, bool> _queryAABBCallback;
+        private Func<int, bool> _queryAABBCallbackWrapper;
 
         /// <summary>
         /// Ray-cast the world for all fixtures in the path of the ray. Your callback
@@ -871,34 +785,45 @@ namespace FarseerPhysics.Dynamics
         /// <param name="callback">A user implemented callback class.</param>
         /// <param name="point1">The ray starting point.</param>
         /// <param name="point2">The ray ending point.</param>
-        public void RayCast(RayCastCallback callback, Vector2 point1, Vector2 point2)
+        public void RayCast(Func<Fixture, Vector2, Vector2, float, float> callback, Vector2 point1, Vector2 point2)
         {
             RayCastInput input = new RayCastInput();
             input.MaxFraction = 1.0f;
             input.Point1 = point1;
             input.Point2 = point2;
 
-            ContactManager.BroadPhase.RayCast((rayCastInput, proxyId) =>
-                                                  {
-                                                      FixtureProxy proxy = ContactManager.BroadPhase.GetProxy(proxyId);
-                                                      Fixture fixture = proxy.Fixture;
-                                                      int index = proxy.ChildIndex;
-                                                      RayCastOutput output;
-                                                      bool hit = fixture.RayCast(out output, ref rayCastInput, index);
-
-                                                      if (hit)
-                                                      {
-                                                          float fraction = output.Fraction;
-                                                          Vector2 point = (1.0f - fraction) * input.Point1 +
-                                                                          fraction * input.Point2;
-                                                          return callback(fixture, point, output.Normal, fraction);
-                                                      }
-
-                                                      return input.MaxFraction;
-                                                  }, ref input);
+            _rayCastCallback = callback;
+            ContactManager.BroadPhase.RayCast(_rayCastCallbackWrapper, ref input);
+            _rayCastCallback = null;
         }
 
-        void SetIsland(Body body)
+        /// <summary>
+        /// Called for each fixture found in the query. You control how the ray cast
+        /// proceeds by returning a float:
+        /// <returns>-1 to filter, 0 to terminate, fraction to clip the ray for closest hit, 1 to continue</returns>
+        /// </summary>
+        private Func<Fixture, Vector2, Vector2, float, float> _rayCastCallback;
+        private Func<RayCastInput, int, float> _rayCastCallbackWrapper;
+
+        private float RayCastCallbackWrapper(RayCastInput rayCastInput, int proxyId)
+        {
+            FixtureProxy proxy = ContactManager.BroadPhase.GetProxy(proxyId);
+            Fixture fixture = proxy.Fixture;
+            int index = proxy.ChildIndex;
+            RayCastOutput output;
+            bool hit = fixture.RayCast(out output, ref rayCastInput, index);
+
+            if (hit)
+            {
+                float fraction = output.Fraction;
+                Vector2 point = (1.0f - fraction) * rayCastInput.Point1 + fraction * rayCastInput.Point2;
+                return _rayCastCallback(fixture, point, output.Normal, fraction);
+            }
+
+            return rayCastInput.MaxFraction;
+        }
+
+        private void SetIsland(Body body)
         {
 #if USE_ISLAND_SET
             if (!IslandSet.Contains(body))
@@ -921,7 +846,7 @@ namespace FarseerPhysics.Dynamics
 #if USE_ISLAND_SET
             Debug.Assert(IslandSet.Count == 0);
 #else
-			foreach (Body b in BodyList)
+            foreach (Body b in BodyList)
             {
                 b.Flags &= ~BodyFlags.Island;
             }
@@ -933,9 +858,8 @@ namespace FarseerPhysics.Dynamics
                 c.Flags &= ~ContactFlags.Island;
             }
 #else
-			for (int i = 0; i < ContactManager.ContactList.Count; i++)
+            foreach (Contact c in ContactManager.ContactList)
             {
-                Contact c = ContactManager.ContactList[i];
                 c.Flags &= ~ContactFlags.Island;
             }
 #endif
@@ -951,7 +875,7 @@ namespace FarseerPhysics.Dynamics
 
 #if USE_AWAKE_BODY_SET
 
-#if (!SILVERLIGHT)
+#if (!SILVERLIGHT && !WINDOWS_PHONE)
             // If AwakeBodyList is empty, the Island code will not have a chance
             // to update the diagnostics timer so reset the timer here. 
             Island.JointUpdateTime = 0;
@@ -986,7 +910,6 @@ namespace FarseerPhysics.Dynamics
                 Island.Clear();
                 int stackCount = 0;
                 _stack[stackCount++] = seed;
-
                 SetIsland(seed);
 
                 // Perform a depth first search (DFS) on the constraint graph.
@@ -1019,7 +942,7 @@ namespace FarseerPhysics.Dynamics
                         }
 
                         // Is this contact solid and touching?
-                        if (!ce.Contact.Enabled || !ce.Contact.IsTouching())
+                        if (ce.Contact.Enabled == false || ce.Contact.IsTouching() == false)
                         {
                             continue;
                         }
@@ -1046,7 +969,6 @@ namespace FarseerPhysics.Dynamics
                         Debug.Assert(stackCount < stackSize);
                         _stack[stackCount++] = other;
                         SetIsland(other);
-                        //other.Flags |= BodyFlags.Island;
                     }
 
                     // Search all joints connect to this body.
@@ -1079,7 +1001,6 @@ namespace FarseerPhysics.Dynamics
 
                             Debug.Assert(stackCount < stackSize);
                             _stack[stackCount++] = other;
-                            // other.Flags |= BodyFlags.Island;
                             SetIsland(other);
                         }
                         else
@@ -1169,7 +1090,7 @@ namespace FarseerPhysics.Dynamics
                     b.Sweep.Alpha0 = 0.0f;
                 }
 #else
-				for (int i = 0; i < BodyList.Count; i++)
+                for (int i = 0; i < BodyList.Count; i++)
                 {
                     BodyList[i].Flags &= ~BodyFlags.Island;
                     BodyList[i].Sweep.Alpha0 = 0.0f;
@@ -1179,7 +1100,7 @@ namespace FarseerPhysics.Dynamics
                 foreach (var c in ContactManager.ActiveContacts)
                 {
 #else
-				for (int i = 0; i < ContactManager.ContactList.Count; i++)
+                for (int i = 0; i < ContactManager.ContactList.Count; i++)
                 {
                     Contact c = ContactManager.ContactList[i];
 #endif
@@ -1201,8 +1122,8 @@ namespace FarseerPhysics.Dynamics
                 foreach (var c in ContactManager.ActiveContacts)
                 {
 #else
-            for (int i = 0; i < ContactManager.ContactList.Count; i++)
-            {
+                for (int i = 0; i < ContactManager.ContactList.Count; i++)
+                {
                     Contact c = ContactManager.ContactList[i];
 #endif
 
@@ -1398,7 +1319,7 @@ namespace FarseerPhysics.Dynamics
                             }
 
                             // Has this contact already been added to the island?
-                            if ((contact.Flags & ContactFlags.Island) == ContactFlags.Island)
+                            if ((contact.Flags & ContactFlags.Island) != ContactFlags.None)
                             {
                                 continue;
                             }
@@ -1448,7 +1369,7 @@ namespace FarseerPhysics.Dynamics
                             Island.Add(contact);
 
                             // Has the other body already been added to the island?
-                            if ((other.Flags & BodyFlags.Island) == BodyFlags.Island)
+                            if ((other.Flags & BodyFlags.Island) != BodyFlags.None)
                             {
                                 continue;
                             }
@@ -1479,10 +1400,7 @@ namespace FarseerPhysics.Dynamics
                 subStep.dt = (1.0f - minAlpha) * step.dt;
                 subStep.inv_dt = 1.0f / subStep.dt;
                 subStep.dtRatio = 1.0f;
-                //subStep.positionIterations = 20;
-                //subStep.velocityIterations = step.velocityIterations;
-                //subStep.warmStarting = false;
-                Island.SolveTOI(ref subStep, bA0.IslandIndex, bB0.IslandIndex);
+                Island.SolveTOI(ref subStep, bA0.IslandIndex, bB0.IslandIndex, false);
 
                 // Reset island flags and synchronize broad-phase proxies.
                 for (int i = 0; i < Island.BodyCount; ++i)
@@ -1569,6 +1487,7 @@ namespace FarseerPhysics.Dynamics
 
             Fixture myFixture = null;
 
+            //TODO: Do not use anon
             // Query the world for overlapping shapes.
             QueryAABB(
                 fixture =>
@@ -1601,6 +1520,7 @@ namespace FarseerPhysics.Dynamics
 
             List<Fixture> fixtures = new List<Fixture>();
 
+            //TODO: Do not use anon
             // Query the world for overlapping shapes.
             QueryAABB(
                 fixture =>
@@ -1614,6 +1534,27 @@ namespace FarseerPhysics.Dynamics
                 }, ref aabb);
 
             return fixtures;
+        }
+
+        /// Shift the world origin. Useful for large worlds.
+        /// The body shift formula is: position -= newOrigin
+        /// @param newOrigin the new origin with respect to the old origin
+        /// Warning: Calling this method mid-update might cause a crash.
+        public void ShiftOrigin(Vector2 newOrigin)
+        {
+            foreach (Body b in BodyList)
+            {
+                b.Xf.p -= newOrigin;
+                b.Sweep.C0 -= newOrigin;
+                b.Sweep.C -= newOrigin;
+            }
+
+            foreach (Joint joint in JointList)
+            {
+                //joint.ShiftOrigin(newOrigin); //TODO: uncomment
+            }
+
+            ContactManager.BroadPhase.ShiftOrigin(newOrigin);
         }
 
         public void Clear()

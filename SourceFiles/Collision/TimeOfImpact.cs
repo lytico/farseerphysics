@@ -1,6 +1,6 @@
 ﻿/*
-* Farseer Physics Engine based on Box2D.XNA port:
-* Copyright (c) 2011 Ian Qvist
+* Farseer Physics Engine:
+* Copyright (c) 2012 Ian Qvist
 * 
 * Original source Box2D:
 * Copyright (c) 2006-2011 Erin Catto http://www.box2d.org 
@@ -231,9 +231,6 @@ namespace FarseerPhysics.Collision
             {
                 case SeparationFunctionType.Points:
                     {
-                        Vector2 axisA = MathUtils.MulT(ref xfA.q, _axis);
-                        Vector2 axisB = MathUtils.MulT(ref xfB.q, -_axis);
-
                         Vector2 localPointA = _proxyA.Vertices[indexA];
                         Vector2 localPointB = _proxyB.Vertices[indexB];
 
@@ -249,8 +246,6 @@ namespace FarseerPhysics.Collision
                         Vector2 normal = MathUtils.Mul(ref xfA.q, _axis);
                         Vector2 pointA = MathUtils.Mul(ref xfA, _localPoint);
 
-                        Vector2 axisB = MathUtils.MulT(ref xfB.q, -normal);
-
                         Vector2 localPointB = _proxyB.Vertices[indexB];
                         Vector2 pointB = MathUtils.Mul(ref xfB, localPointB);
 
@@ -262,8 +257,6 @@ namespace FarseerPhysics.Collision
                     {
                         Vector2 normal = MathUtils.Mul(ref xfB.q, _axis);
                         Vector2 pointB = MathUtils.Mul(ref xfB, _localPoint);
-
-                        Vector2 axisA = MathUtils.MulT(ref xfA.q, -normal);
 
                         Vector2 localPointA = _proxyA.Vertices[indexA];
                         Vector2 pointA = MathUtils.Mul(ref xfA, localPointA);
